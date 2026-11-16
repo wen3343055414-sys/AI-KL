@@ -10,6 +10,7 @@
     "dev": "node --env-file-if-exists=.env --watch src/server.js",
     "start": "node --env-file-if-exists=.env src/server.js",
     "build": "node scripts/build.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "start:admin": "node --env-file-if-exists=.env admin/src/server.js"
   }
 }

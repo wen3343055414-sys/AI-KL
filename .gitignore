@@ -48,14 +48,7 @@ __pycache__/
 *.sqlite-shm
 *.sqlite-wal
 
-# Installed Windows runtime, private keys, and generated state
-outputs/
-work/
-releases/
-integrated/
-*.log.1
-scheduled-task.xml
-admin/config.json
+# Credentials and generated artifacts
 **/model-bridge-token
 *.pem
 *.key

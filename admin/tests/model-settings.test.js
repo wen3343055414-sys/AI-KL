@@ -5,7 +5,9 @@ import { createServer } from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
 import { AdminStore } from '../src/store.js';
-import { ModelSettings, WindowsKeyVault, normalizeBaseUrl, allowedAddress, probeModels } from '../src/model-settings.js';
+import { KeyVault } from '../src/key-vault.js';
+import { randomBytes } from 'node:crypto';
+import { ModelSettings, normalizeBaseUrl, allowedAddress, probeModels } from '../src/model-settings.js';
 
 const KEY = 'fixture-only-not-a-real-provider-key';
 const fakeVault = { protect: async value => `fixture-cipher:${Buffer.from(value).toString('base64')}`, unprotect: async value => Buffer.from(value.split(':')[1], 'base64').toString() };
@@ -149,12 +151,20 @@ test('model probe has an absolute connection deadline and safe authorization fai
   await assert.rejects(probeModels(base({ baseUrl: denied }), KEY), error => error.message.includes('认证失败') && !error.message.includes(KEY));
 });
 
-test('Windows DPAPI performs a real local round trip without plaintext persistence', { skip: process.platform !== 'win32' }, async t => {
+test('encrypted credentials survive moving the database and key to another runtime', async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'model-vault-test-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  await writeFile(path.join(directory, 'config.json'), JSON.stringify({ python: process.env.AI_WQS_TEST_PYTHON || 'python' }));
-  const vault = new WindowsKeyVault(path.resolve(import.meta.dirname, '..'), { deploymentRoot: directory });
+  const keyFile = path.join(directory, 'encryption-key');
+  await writeFile(keyFile, randomBytes(32).toString('hex'), { mode: 0o600 });
+  const vault = new KeyVault({ keyFile });
   const encrypted = await vault.protect(KEY);
   assert.notEqual(encrypted, KEY); assert.ok(!encrypted.includes(KEY));
-  assert.equal(await vault.unprotect(encrypted), KEY);
+  assert.notEqual(await vault.protect(KEY), encrypted);
+  assert.equal(await new KeyVault({ keyFile }).unprotect(encrypted), KEY);
+  await assert.rejects(new KeyVault({ key: randomBytes(32).toString('hex') }).unprotect(encrypted), /无法解密/);
+  const pieces = encrypted.split(':');
+  const cipher = Buffer.from(pieces[3], 'base64'); cipher[0] ^= 1; pieces[3] = cipher.toString('base64');
+  await assert.rejects(vault.unprotect(pieces.join(':')), /无法解密/);
+  await assert.rejects(new KeyVault({ key: '', keyFile: '' }).protect(KEY), /加密密钥未配置/);
+  await assert.rejects(vault.unprotect('legacy-os-bound-cipher'), /重新输入/);
 });

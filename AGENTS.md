@@ -4,10 +4,10 @@
 
 ## 唯一代码来源与任务开始
 
-- 本地聊天和云端聊天都在本仓库的实际 Git 工作副本中开发；本机发布跟随 `main`。功能开发使用任务分支或 worktree，通过 PR 审阅后合入 `main`。
+- 本地聊天和云端聊天都在本仓库的实际 Git 工作副本中开发；应用源代码以 `main` 为基线。功能开发使用任务分支或 worktree，通过 PR 审阅后合入 `main`。
 - 开始先检查 `git status`、当前分支和远端。在工作区干净时 `git fetch origin`，更新 `main` 使用 `git pull --ff-only origin main`；任务分支先检查差异再整合最新 `origin/main`。存在未提交修改时先保留并检查，不能 reset、覆盖或丢弃。
-- 并行任务使用各自分支或 worktree，完成后审阅并通过 PR 整合，不强制推送。`codex/gpt-docker-github` 是原部署分支，不再作为未来发布来源。
-- 修改应用用 `public/`、`src/`，管理服务用 `admin/`，Windows 发布与更新用 `ops/windows/`。不要修改已部署的 `releases/`、`integrated/` 或运行目录来代替源代码修改。
+- 并行任务使用各自分支或 worktree，完成后审阅并通过 PR 整合，不强制推送。
+- 工作台前端用 `public/`，数据后端用 `src/`，模型与管理服务用 `admin/`。运行目录不能代替源代码修改。
 - 收尾前再次检查远端是否前进，解决并验证并行变更后再推送。只有 GitHub 上可读取的提交才算同步完成。
 
 ## 工作阶段结束时
@@ -28,12 +28,10 @@
 
 这些是代理在任务执行期间遵循的指令，不是后台服务或实时同步机制。没有运行中的任务时不会自动提交；文件保存在云端工作区也不等于已推送 GitHub。只有远端分支可读取的提交才算完成备份。
 
-## 本机服务器
+## 平台无关的运行约定
 
-- 前端为 public/，后端为 src/，部署为 compose.yaml 的 frontend/backend 服务。数据库和备份在 Docker 持久卷，不进入代码仓库。
-- 已实现独立 Windows 管理服务、真实模型调用和 Token 统计。密钥在本机 DPAPI 加密保存，工作台通过内部认证通道调用，旧演示历史保留标记。
-- 后续修改运行 `npm test`、`node scripts/check-source.mjs` 和 `npm run build`。Windows 运行 `python -m unittest discover -s tests -p 'test_windows_*.py'`，Linux 运行全部 `test_*.py`；另运行 `python -m unittest discover -s admin/tests -p 'test_*.py'`。容器改动验证 Compose 与 HTTP 行为。
-- 本机只跟随安装配置的 `main` 分支。代码需经审阅合入 `main`，同一 SHA 的 push CI 成功后自动部署。PR 或开发分支通过 CI 不代表已在本机上线。
-- 数据结构变更需考虑持久化、迁移与代码回退，不自动删除数据卷或恢复旧业务数据。
-- Windows 本机更新由任务计划每分钟检查，通过同一 SHA 的 push CI 后更新 Docker 前后端和独立管理服务；管理服务保留稳定的数据目录，切换失败回退代码。Linux 原有 systemd 路径继续保留，不包含 Windows DPAPI 管理服务。
-- 不将未经提交的聊天代码片段当成自动同步。持续更新需要本机开机、用户登录、Docker 运行和 GitHub 可访问。
+- 保留智作台前端、账号、工作空间、模型协议、用量统计、网站与域名业务源码和对应测试。
+- 运行配置通过环境变量或外部秘密文件传入；端口、服务来源、数据目录不能绑定某台机器。
+- 不引入操作系统安装器、主机更新器、桌面容器控制、任务计划、防火墙或临时隧道管理。
+- 服务端使用 Node.js 24 与 SQLite；持久化目录和加密主密钥由运行环境保管。迁移时保留数据库与相同的主密钥。
+- 修改后运行 `npm test`、`node scripts/check-source.mjs` 和 `npm run build`；管理服务专项测试可运行 `npm --prefix admin test`。界面变化继续验证 `scripts/auth-ui-check.mjs`。

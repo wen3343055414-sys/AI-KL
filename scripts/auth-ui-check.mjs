@@ -33,7 +33,7 @@ try {
   const newerSessionId = recordExchange(initial.state, "", "规划本周工作", "AI 对话", "2026-11-15T03:00:00.000Z");
   const saved = await fetch(base + "/api/workspace", { method: "PUT", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ state: initial.state, baseRevision: initial.revision }) });
   assert.equal(saved.status, 200);
-  browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+  browser = await chromium.launch({ ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : { channel: "chrome" }), headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 960 } });
   await context.addInitScript(state => localStorage.setItem("zhizuotai.workspace.v1", JSON.stringify(state)), initial.state);
   const page = await context.newPage();
@@ -91,7 +91,7 @@ try {
   await page.locator('#prompt-form input[name="title"]').fill("Bob 的独立提示词");
   await page.locator('#prompt-form textarea[name="content"]').fill("这是新账号的独立工作空间。");
   await page.locator('#prompt-form button[type="submit"]').click();
-  await page.waitForFunction(() => document.querySelector("[data-server-label]")?.textContent === "已同步到本机数据库");
+  await page.waitForFunction(() => document.querySelector("[data-server-label]")?.textContent === "已同步到服务器");
   const logout = async () => {
     await page.goto(base + "/#settings");
     await page.locator('[data-sync="logout"]').click();
@@ -165,7 +165,7 @@ try {
   await page.locator("#message-input").fill("侧边栏切换保留的草稿");
   const messageBefore = await page.locator("#messages").innerText();
   const scrollBefore = await page.locator("#messages").evaluate(element => {
-    element.scrollTop = 0;
+    element.scrollTo({ top: 0, behavior: "instant" });
     return element.scrollTop;
   });
   await page.screenshot({ path: path.join(output, "sidebar-expanded-desktop.png") });

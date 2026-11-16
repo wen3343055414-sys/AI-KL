@@ -229,7 +229,7 @@ async function performChat(taskId) {
     while (sync.pending || sync.busy) {
       if (sync.conflict) throw new Error('请先处理工作空间同步冲突，再重新请求。');
       if (accountCycle !== chatAccountCycle) return;
-      if (!sync.authenticated || Date.now() > until) throw new Error('对话尚未保存到本机，请恢复连接后重新请求。');
+      if (!sync.authenticated || Date.now() > until) throw new Error('对话尚未保存到服务器，请恢复连接后重新请求。');
       if (!sync.busy) await sync.flush();
       if (sync.pending || sync.busy) await new Promise(resolve => setTimeout(resolve, 150));
     }
@@ -416,7 +416,7 @@ function documentResults() {
       state.documents.length ? "没有找到匹配的资料" : "给想法，一点背景资料",
       "添加一份资料，随时查找、预览，或将文本带入对话。",
     );
-  return `<div class="document-grid">${list.map((d) => `<article class="document-card"><div class="document-top"><span class="tile-icon tone-blue">${icon("file")}</span>${iconButton("delete-document", `删除：${d.name}`, "trash", `data-id="${d.id}"`)}</div><h3>${e(d.name)}</h3><p class="metadata">${d.size < 1024 ? `${d.size} B` : `${(d.size / 1024).toFixed(1)} KB`} · ${dateText(d.createdAt)}</p><span class="status-pill">${d.kind === "text" ? "文本已读取 · 本地" : "仅保存文件信息"}</span><div class="document-bottom">${button("document-tag", e(d.tag), "", "btn btn-quiet", `data-id="${d.id}" aria-label="编辑标签：${e(d.name)}"`)}${button("view-document", `查看 ${icon("arrow")}`, "", "btn btn-quiet", `data-id="${d.id}"`)}</div></article>`).join("")}</div>`;
+  return `<div class="document-grid">${list.map((d) => `<article class="document-card"><div class="document-top"><span class="tile-icon tone-blue">${icon("file")}</span>${iconButton("delete-document", `删除：${d.name}`, "trash", `data-id="${d.id}"`)}</div><h3>${e(d.name)}</h3><p class="metadata">${d.size < 1024 ? `${d.size} B` : `${(d.size / 1024).toFixed(1)} KB`} · ${dateText(d.createdAt)}</p><span class="status-pill">${d.kind === "text" ? "文本已读取" : "仅保存文件信息"}</span><div class="document-bottom">${button("document-tag", e(d.tag), "", "btn btn-quiet", `data-id="${d.id}" aria-label="编辑标签：${e(d.name)}"`)}${button("view-document", `查看 ${icon("arrow")}`, "", "btn btn-quiet", `data-id="${d.id}"`)}</div></article>`).join("")}</div>`;
 }
 function documentTabs() {
   return tabs(
@@ -489,7 +489,7 @@ function useTool(id) {
   else if (id === "text-stats") openDialog("文本统计",
     `<div class="dialog-body"><label for="tool-text">待统计文本<textarea id="tool-text" class="input" maxlength="50000" placeholder="在这里输入或粘贴文本…" autofocus></textarea></label><div class="text-stat-results" id="text-stat-results" aria-live="polite">${textStatResults("")}</div></div>`);
   else if (id === "data-export") openDialog("数据导出",
-    `<div class="dialog-body"><p>导出当前账号的全部工作空间内容，保存为 JSON 备份。</p><ul class="export-summary"><li>${(state.todos || []).length} 项任务</li><li>${state.sessions.length} 段对话</li><li>${state.prompts.length} 个提示词</li><li>${state.documents.length} 份资料</li></ul><p class="field-help">备份包含插件偏好，可在设置的“本地数据”中恢复。</p><div class="dialog-actions">${button("export-all", "导出 JSON 备份", "download", "btn btn-primary")}</div></div>`);
+    `<div class="dialog-body"><p>导出当前账号的全部工作空间内容，保存为 JSON 备份。</p><ul class="export-summary"><li>${(state.todos || []).length} 项任务</li><li>${state.sessions.length} 段对话</li><li>${state.prompts.length} 个提示词</li><li>${state.documents.length} 份资料</li></ul><p class="field-help">备份包含插件偏好，可在设置的“工作空间数据”中恢复。</p><div class="dialog-actions">${button("export-all", "导出 JSON 备份", "download", "btn btn-primary")}</div></div>`);
 }
 
 function historyResults() {
@@ -510,7 +510,7 @@ function chatPage() {
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .map(
       (s) =>
-        `<a href="#chat/${s.id}" class="session-link ${session?.id === s.id ? "active" : ""}" ${session?.id === s.id ? 'aria-current="page"' : ""} title="${e(s.title)}">${e(s.title)}<small>${dateText(s.updatedAt)} · 本地保存</small></a>`,
+        `<a href="#chat/${s.id}" class="session-link ${session?.id === s.id ? "active" : ""}" ${session?.id === s.id ? 'aria-current="page"' : ""} title="${e(s.title)}">${e(s.title)}<small>${dateText(s.updatedAt)} · 已保存</small></a>`,
     )
     .join(
       "",
@@ -556,7 +556,7 @@ function settingsPage() {
       )
       .join(
         "",
-      )}</div></div><div class="setting-row"><div><strong>默认助手</strong><small>选择通用、写作或编程风格；实际模型跟随服务端设置</small></div><select class="input" data-setting="model" aria-label="默认助手">${modelOptions()}</select></div></section><section class="settings-card"><h2>${icon("spark")}模型连接</h2><p>模型配置由智作台服务端统一管理，保存后自动同步。</p><div class="connection-state"><strong>AI 模型服务</strong><span class="status-pill" data-model-label>${e(activeModel().ready ? activeModel().model : "等待配置")}</span></div>${notice("发送消息时，对话上下文和你选入的文本会发送给服务端配置的模型服务。API 密钥仅由服务端使用，不下发到浏览器。")}<div class="setting-row">${button("connection-help", "查看接入说明", "arrow", "btn")}</div></section><section class="settings-card"><h2>${icon("shield")}本地数据</h2><p>${sync?.mode === "server" ? "内容保存在本机数据库，容器重建后继续保留。也可以导出 JSON 备份并在需要时恢复。" : "内容保存在当前浏览器，清理浏览器前请导出 JSON 备份。"}</p><div class="settings-actions">${button("export-all", "导出全部数据", "download", "btn")}${button("import-backup", "恢复备份", "upload", "btn")}${button("reset", "重置工作台", "trash", "btn btn-danger")}</div><input type="file" id="backup-input" accept="application/json,.json" hidden /></section></div><aside><section class="settings-card"><h2>${icon("help")}使用帮助</h2><ol class="help-list"><li>在提示词库点亮星标，常用方法就会出现在首页。</li><li>用全局搜索查找提示词、历史对话与资料正文。</li><li>在知识库添加文本，可将内容带入对话输入框。</li><li>按 Ctrl / ⌘ + K 打开搜索，按 Esc 关闭弹窗。</li></ol><div class="settings-actions">${button("help", "打开使用帮助", "help", "btn")}</div></section><section class="settings-card"><h2>${icon("layers")}关于智作台</h2><p>一个让创作、思考与日常工作从容发生的 AI 工作空间。</p><div class="connection-state"><span>版本</span><strong>0.3.0 · 本地服务版</strong></div></section></aside></div>`
+      )}</div></div><div class="setting-row"><div><strong>默认助手</strong><small>选择通用、写作或编程风格；实际模型跟随服务端设置</small></div><select class="input" data-setting="model" aria-label="默认助手">${modelOptions()}</select></div></section><section class="settings-card"><h2>${icon("spark")}模型连接</h2><p>模型配置由智作台服务端统一管理，保存后自动同步。</p><div class="connection-state"><strong>AI 模型服务</strong><span class="status-pill" data-model-label>${e(activeModel().ready ? activeModel().model : "等待配置")}</span></div>${notice("发送消息时，对话上下文和你选入的文本会发送给服务端配置的模型服务。API 密钥仅由服务端使用，不下发到浏览器。")}<div class="setting-row">${button("connection-help", "查看接入说明", "arrow", "btn")}</div></section><section class="settings-card"><h2>${icon("shield")}工作空间数据</h2><p>${sync?.mode === "server" ? "内容保存在服务器数据库。也可以导出 JSON 备份并在需要时恢复。" : "内容保存在当前浏览器，清理浏览器前请导出 JSON 备份。"}</p><div class="settings-actions">${button("export-all", "导出全部数据", "download", "btn")}${button("import-backup", "恢复备份", "upload", "btn")}${button("reset", "重置工作台", "trash", "btn btn-danger")}</div><input type="file" id="backup-input" accept="application/json,.json" hidden /></section></div><aside><section class="settings-card"><h2>${icon("help")}使用帮助</h2><ol class="help-list"><li>在提示词库点亮星标，常用方法就会出现在首页。</li><li>用全局搜索查找提示词、历史对话与资料正文。</li><li>在知识库添加文本，可将内容带入对话输入框。</li><li>按 Ctrl / ⌘ + K 打开搜索，按 Esc 关闭弹窗。</li></ol><div class="settings-actions">${button("help", "打开使用帮助", "help", "btn")}</div></section><section class="settings-card"><h2>${icon("layers")}关于智作台</h2><p>一个让创作、思考与日常工作从容发生的 AI 工作空间。</p><div class="connection-state"><span>版本</span><strong>0.3.0 · 智作台</strong></div></section></aside></div>`
   );
 }
 function accountSettings() {
@@ -583,11 +583,11 @@ function workspaceSettings() {
       <div><strong>${state.documents.length}</strong><span>知识资料</span></div>
       <div><strong>${state.sessions.length}</strong><span>累计对话</span></div>
     </div>
-    <p class="workspace-settings-note">数据导出、备份与恢复可在下方“本地数据”中管理。</p>
+    <p class="workspace-settings-note">数据导出、备份与恢复可在下方“工作空间数据”中管理。</p>
   </section>`;
 }
 function serverSettings() {
-  return `<section class="settings-card"><h2>${icon("shield")}本机服务器</h2><p>${sync?.mode === "server" ? "会话、提示词、资料与设置由本机数据库统一保存，其他已登录页面会自动同步。" : "静态部署使用浏览器保存。运行本机 Docker 服务后可启用数据库与自动同步。"}</p><div class="connection-state"><span>保存状态</span><strong data-server-label>${e(sync?.label || "正在连接")}</strong></div><div class="connection-state"><span>运行版本</span><strong data-server-version>${e(sync?.version?.slice(0, 12) || "静态演示版")}</strong></div><div class="settings-actions"><button type="button" class="btn" data-sync="retry">重新连接</button></div></section>`;
+  return `<section class="settings-card"><h2>${icon("shield")}数据同步</h2><p>${sync?.mode === "server" ? "会话、提示词、资料与设置由服务器数据库统一保存，其他已登录页面会自动同步。" : "静态部署使用浏览器保存。连接数据后端后可启用数据库与自动同步。"}</p><div class="connection-state"><span>保存状态</span><strong data-server-label>${e(sync?.label || "正在连接")}</strong></div><div class="connection-state"><span>运行版本</span><strong data-server-version>${e(sync?.version?.slice(0, 12) || "静态演示版")}</strong></div><div class="settings-actions"><button type="button" class="btn" data-sync="retry">重新连接</button></div></section>`;
 }
 function render() {
   const textarea = document.querySelector("#message-input");
@@ -605,7 +605,7 @@ function render() {
     )
     .join(
       "",
-    )}</nav><div class="sidebar-bottom"><div class="sidebar-settings-wrap"><a href="#settings" class="nav-link sidebar-settings ${page === "settings" ? "active" : ""}" ${page === "settings" ? 'aria-current="page"' : ""}>${icon("settings")}<span>设置<small>账号、工作空间与偏好</small></span>${icon("chevron")}</a></div></div></aside><button class="sidebar-backdrop" data-action="close-menu" aria-label="关闭导航" tabindex="-1"></button><div class="workspace"><header class="topbar">${button("toggle-sidebar", '<span data-sidebar-toggle-label>收起侧边栏</span>', "sidebar-close", "sidebar-toggle", 'aria-label="收起侧边栏" title="收起侧边栏" aria-expanded="true" aria-controls="sidebar" data-menu-button')}<div class="breadcrumb"><span>工作空间</span><span>/</span><span>${title}</span></div><div class="topbar-tools">${button("search", "<span>搜索工作空间…</span><kbd>⌘ K</kbd>", "search", "search-trigger", 'aria-label="搜索工作空间"')}<span class="server-sync-label" data-server-label>${e(sync?.label || "正在连接服务器")}</span><span class="demo-badge" data-model-label>${e(activeModel().ready ? activeModel().model : "模型未就绪")}</span></div></header><main class="main" id="main" tabindex="-1"><div id="sync-conflict" class="sync-banner" ${sync?.conflict ? "" : "hidden"}><span>其他页面有新修改。本页内容已保留，请选择同步版本。</span><button type="button" class="btn" data-sync="use-server">采用服务器版本</button><button type="button" class="btn" data-sync="use-local">保留本页内容</button></div><div id="sync-version" class="sync-banner" ${newServerVersion ? "" : "hidden"}><span>新版本已部署。你的输入仍保留，刷新即可使用。</span><button type="button" class="btn" data-sync="reload">刷新到新版本</button></div>${{ home: homePage, todo: todoPage, plugins: pluginsPage, prompts: promptsPage, knowledge: knowledgePage, tasks: historyPage, chat: chatPage, settings: settingsPage }[page]()}${page === "chat" ? "" : '<footer class="footer"><span>智作台 · 让想法有处落地</span><span>为每一份专注而设计 &nbsp; / &nbsp; 本地服务版 0.3</span></footer>'}</main></div></div>`;
+    )}</nav><div class="sidebar-bottom"><div class="sidebar-settings-wrap"><a href="#settings" class="nav-link sidebar-settings ${page === "settings" ? "active" : ""}" ${page === "settings" ? 'aria-current="page"' : ""}>${icon("settings")}<span>设置<small>账号、工作空间与偏好</small></span>${icon("chevron")}</a></div></div></aside><button class="sidebar-backdrop" data-action="close-menu" aria-label="关闭导航" tabindex="-1"></button><div class="workspace"><header class="topbar">${button("toggle-sidebar", '<span data-sidebar-toggle-label>收起侧边栏</span>', "sidebar-close", "sidebar-toggle", 'aria-label="收起侧边栏" title="收起侧边栏" aria-expanded="true" aria-controls="sidebar" data-menu-button')}<div class="breadcrumb"><span>工作空间</span><span>/</span><span>${title}</span></div><div class="topbar-tools">${button("search", "<span>搜索工作空间…</span><kbd>⌘ K</kbd>", "search", "search-trigger", 'aria-label="搜索工作空间"')}<span class="server-sync-label" data-server-label>${e(sync?.label || "正在连接服务器")}</span><span class="demo-badge" data-model-label>${e(activeModel().ready ? activeModel().model : "模型未就绪")}</span></div></header><main class="main" id="main" tabindex="-1"><div id="sync-conflict" class="sync-banner" ${sync?.conflict ? "" : "hidden"}><span>其他页面有新修改。本页内容已保留，请选择同步版本。</span><button type="button" class="btn" data-sync="use-server">采用服务器版本</button><button type="button" class="btn" data-sync="use-local">保留本页内容</button></div><div id="sync-version" class="sync-banner" ${newServerVersion ? "" : "hidden"}><span>新版本已部署。你的输入仍保留，刷新即可使用。</span><button type="button" class="btn" data-sync="reload">刷新到新版本</button></div>${{ home: homePage, todo: todoPage, plugins: pluginsPage, prompts: promptsPage, knowledge: knowledgePage, tasks: historyPage, chat: chatPage, settings: settingsPage }[page]()}${page === "chat" ? "" : '<footer class="footer"><span>智作台 · 让想法有处落地</span><span>为每一份专注而设计 &nbsp; / &nbsp; 智作台 0.3</span></footer>'}</main></div></div>`;
   syncSidebar();
   const messages = document.querySelector("#messages");
   if (messages) messages.scrollTop = messages.scrollHeight;
@@ -649,7 +649,7 @@ function showDocument(id) {
   if (!d) return;
   openDialog(
     d.name,
-    `<div class="dialog-body"><p>${e(d.tag)} · ${d.size} 字节 · ${d.kind === "text" ? "文本已读取，仅在本地保存" : "仅保存文件信息，未上传或解析"}</p>${d.kind === "text" ? `<pre class="preview-text">${e(d.content)}</pre><div class="dialog-actions">${button("copy-document", "复制文本", "copy", "btn", `data-id="${d.id}"`)}${button("attach-document", "带入对话", "chat", "btn btn-primary", `data-id="${d.id}"`)}</div>` : notice("本版本暂不解析此格式，也未保存文件二进制内容。请将需要讨论的段落另存为 TXT 或 Markdown 后添加。")}</div>`,
+    `<div class="dialog-body"><p>${e(d.tag)} · ${d.size} 字节 · ${d.kind === "text" ? "文本已读取，保存在当前工作空间" : "仅保存文件信息，未上传或解析"}</p>${d.kind === "text" ? `<pre class="preview-text">${e(d.content)}</pre><div class="dialog-actions">${button("copy-document", "复制文本", "copy", "btn", `data-id="${d.id}"`)}${button("attach-document", "带入对话", "chat", "btn btn-primary", `data-id="${d.id}"`)}</div>` : notice("本版本暂不解析此格式，也未保存文件二进制内容。请将需要讨论的段落另存为 TXT 或 Markdown 后添加。")}</div>`,
   );
 }
 function showSearch() {
@@ -745,7 +745,7 @@ async function addFiles(files) {
           content.length >
           MAX_DOCUMENT_CHARS
       )
-        throw new Error("超出本地文本容量，请先导出并删除部分资料");
+        throw new Error("超出文本容量，请先导出并删除部分资料");
       if (text && content.includes("\u0000"))
         throw new Error("文件包含二进制内容，请使用 UTF-8 文本");
       mutate((next) =>
@@ -772,7 +772,7 @@ async function addFiles(files) {
       "资料添加结果",
       `<div class="dialog-body"><p>已添加 ${count} 份资料。以下文件未保存：</p><div class="preview-text">${e(errors.join("\n"))}</div></div>`,
     );
-  else if (count) toast(`已在本地添加 ${count} 份资料`);
+  else if (count) toast(`已添加 ${count} 份资料`);
 }
 function syncSidebar() {
   const expanded = mobile.matches ? document.body.classList.contains("sidebar-open") : !sidebarCollapsed;
@@ -1004,7 +1004,7 @@ async function handleAction(target) {
       if (!d) break;
       confirmDialog(
         "删除这份资料？",
-        `“${d.name}”的本地记录将被删除。原始文件不受影响。`,
+        `“${d.name}”的资料记录将被删除。原始文件不受影响。`,
         "删除资料",
         () => {
           mutate((next) => {
@@ -1012,7 +1012,7 @@ async function handleAction(target) {
           });
           documentFilter = "全部";
           syncDocumentResults();
-          toast("本地资料已删除");
+          toast("资料已删除");
         },
       );
       break;
@@ -1112,13 +1112,13 @@ async function handleAction(target) {
     case "connection-help":
       openDialog(
         "关于模型接入",
-        `<div class="dialog-body"><p>工作台通过本机服务端调用真实模型，模型和密钥在服务端统一设置。</p><ol class="help-list"><li>在智作台服务端的“API 接口设置”中保存接口地址、密钥和模型 ID。</li><li>密钥由 Windows 加密保护，工作台只读取模型名称和就绪状态。</li><li>修改配置后，工作台自动同步；下次发送立即使用服务端当前配置。</li></ol><p>通用、写作和编程助手分别使用不同的提示风格。历史演示消息继续保留标记。</p></div>`,
+        `<div class="dialog-body"><p>工作台通过服务端调用真实模型，模型和密钥在服务端统一设置。</p><ol class="help-list"><li>在智作台服务端的“API 接口设置”中保存接口地址、密钥和模型 ID。</li><li>密钥由服务端加密保护，工作台只读取模型名称和就绪状态。</li><li>修改配置后，工作台自动同步；下次发送立即使用服务端当前配置。</li></ol><p>通用、写作和编程助手分别使用不同的提示风格。历史演示消息继续保留标记。</p></div>`,
       );
       break;
     case "help":
       openDialog(
         "欢迎使用智作台",
-        `<div class="dialog-body"><p>把常用提示词、资料和每次思考放在同一个地方。</p><ol class="help-list"><li>从首页快捷操作开始，或在提示词库选择一个模板。</li><li>发送后调用服务端配置的模型，保存真实回答和任务结果。</li><li>支持多轮会话、重新生成、复制和导出。Token 用量可在服务端总览查看。</li><li>在任务中记录待办并标记完成；在插件中启用搜索、文本统计和数据导出。</li><li>使用 Ctrl / ⌘ + K 搜索，按 Esc 关闭弹窗。</li></ol>${notice("会话由本机数据库保存。发送的消息和所选文本会交给配置的模型服务处理。")}</div>`,
+        `<div class="dialog-body"><p>把常用提示词、资料和每次思考放在同一个地方。</p><ol class="help-list"><li>从首页快捷操作开始，或在提示词库选择一个模板。</li><li>发送后调用服务端配置的模型，保存真实回答和任务结果。</li><li>支持多轮会话、重新生成、复制和导出。Token 用量可在服务端总览查看。</li><li>在任务中记录待办并标记完成；在插件中启用搜索、文本统计和数据导出。</li><li>使用 Ctrl / ⌘ + K 搜索，按 Esc 关闭弹窗。</li></ol>${notice("会话由服务器保存。发送的消息和所选文本会交给配置的模型服务处理。")}</div>`,
       );
       break;
   }
@@ -1247,7 +1247,7 @@ document.addEventListener("change", async (event) => {
         throw new Error("备份格式不符合智作台的数据规范，未修改当前数据。");
       confirmDialog(
         "恢复这份备份？",
-        `将替换当前本地数据：${next.prompts.length} 个提示词、${next.sessions.length} 段会话、${next.documents.length} 份资料、${(next.todos || []).length} 项任务。建议先导出现有数据。`,
+        `将替换当前工作空间数据：${next.prompts.length} 个提示词、${next.sessions.length} 段会话、${next.documents.length} 份资料、${(next.todos || []).length} 项任务。建议先导出现有数据。`,
         "替换并恢复",
         () => {
           persist(next);

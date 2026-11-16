@@ -1,25 +1,28 @@
 import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import https from 'node:https';
 import { createHash } from 'node:crypto';
+import { readSecret } from './config.js';
 import { HttpError } from './store.js';
 
 export class ModelClient {
-  constructor(store, { baseUrl = process.env.MODEL_GATEWAY_URL, tokenFile = process.env.MODEL_BRIDGE_TOKEN_FILE } = {}) {
-    this.store = store; this.baseUrl = baseUrl; this.tokenFile = tokenFile; this.active = new Map();
+  constructor(store, { baseUrl = process.env.MODEL_GATEWAY_URL, tokenFile = process.env.MODEL_BRIDGE_TOKEN_FILE, token = process.env.MODEL_BRIDGE_TOKEN } = {}) {
+    this.store = store; this.baseUrl = baseUrl?.replace(/\/+$/, ''); this.tokenFile = tokenFile; this.token = token; this.active = new Map();
     store.db.exec(`CREATE TABLE IF NOT EXISTS model_replies (request_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, created_at INTEGER NOT NULL, response TEXT NOT NULL)`);
   }
   async request(endpoint, input) {
-    if (!this.baseUrl || !this.tokenFile) throw new HttpError(503, 'model_unconfigured', '请在智作台服务端配置模型接口。');
+    if (!this.baseUrl || !(this.token || this.tokenFile)) throw new HttpError(503, 'model_unconfigured', '请在智作台服务端配置模型接口。');
     let token;
-    try { token = (await readFile(this.tokenFile, 'utf8')).trim(); }
+    try { token = await readSecret(this.token, this.tokenFile, 'MODEL_BRIDGE_TOKEN'); }
     catch { throw new HttpError(503, 'bridge_unavailable', '模型服务连接未就绪，请检查智作台服务端。'); }
-    const url = new URL(this.baseUrl + endpoint);
-    if (url.protocol !== 'http:' || !['host.docker.internal', '127.0.0.1', 'localhost'].includes(url.hostname) || !/^[a-f0-9]{64}$/.test(token)) throw new HttpError(503, 'bridge_invalid', '模型桥接配置无效。');
+    let url;
+    try { url = new URL(this.baseUrl + endpoint); }
+    catch { throw new HttpError(503, 'bridge_invalid', '模型服务地址配置无效。'); }
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new HttpError(503, 'bridge_invalid', '模型桥接配置无效。');
     return new Promise((resolve, reject) => {
       const payload = input === undefined ? null : JSON.stringify(input);
       const timer = setTimeout(() => { request.destroy(); reject(new HttpError(504, 'model_timeout', '模型请求超时，请稍后重试。')); }, 135000);
-      const request = http.request(url, { method: payload ? 'POST' : 'GET', headers: {
-        Host: `127.0.0.1:${url.port}`, 'X-Model-Bridge': token, Accept: 'application/json',
+      const request = (url.protocol === 'https:' ? https : http).request(url, { method: payload ? 'POST' : 'GET', headers: {
+        'X-Model-Bridge': token, Accept: 'application/json',
         ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
       } }, response => {
         const chunks = []; let size = 0;
@@ -34,7 +37,7 @@ export class ModelClient {
           } catch { reject(new HttpError(502, 'bridge_response', '模型服务响应格式无效。')); }
         });
       });
-      request.on('error', () => { clearTimeout(timer); reject(new HttpError(503, 'bridge_unavailable', '智作台服务端暂时不可用，请启动服务端后重试。')); });
+      request.on('error', () => { clearTimeout(timer); reject(new HttpError(503, 'bridge_unavailable', '智作台服务端暂时不可用，请检查服务状态后重试。')); });
       request.end(payload);
     });
   }

@@ -116,7 +116,7 @@ export class WorkspaceSync {
           this.enqueue(migrated);
           await this.flush();
           this.callbacks.onNotice?.("原有记录已迁入工作空间，旧缓存继续保留。");
-        } else { this.callbacks.onState(snapshot.state); this.status("已同步到本机数据库"); }
+        } else { this.callbacks.onState(snapshot.state); this.status("已同步到服务器"); }
       }
       if (cycle !== this.authCycle) return;
       this.unlock();
@@ -134,7 +134,7 @@ export class WorkspaceSync {
     this.pending = structuredClone(state);
     this.sequence++;
     this.cachePending();
-    this.status(this.conflict ? "版本冲突 · 当前修改已保留" : "正在保存到本机服务器");
+    this.status(this.conflict ? "版本冲突 · 当前修改已保留" : "正在保存到服务器");
     clearTimeout(this.flushTimer);
     this.flushTimer = setTimeout(() => this.flush(), 300);
   }
@@ -163,7 +163,7 @@ export class WorkspaceSync {
       if (this.sequence === sequence) {
         this.pending = null;
         this.clearPending();
-        this.status("已同步到本机数据库");
+        this.status("已同步到服务器");
       } else this.cachePending();
     } catch (error) {
       if (cycle !== this.authCycle) return;
@@ -197,7 +197,7 @@ export class WorkspaceSync {
         this.revision = remote.revision;
         this.callbacks.onState(remote.state);
       }
-      this.status("已同步到本机数据库");
+      this.status("已同步到服务器");
     } catch (error) {
       if (cycle !== this.authCycle) return;
       if (error.status === 401) this.lock();

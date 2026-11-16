@@ -135,7 +135,7 @@ test('visitor server serves real relative assets and nested pages with safe MIME
 });
 
 test('visitor server never exposes administration, writes, traversal paths or arbitrary rebinding hosts', async t => {
-  let publicHost = 'current.trycloudflare.com';
+  let publicHost = 'current.sites.fixture.test';
   const f = await fixture(t, { allowedHost: host => host === publicHost });
   const site = f.websites.create(draft()); f.websites.publish(site.id, site);
   for (const route of ['/', '/api/session', '/api/websites', '/config.json', '/data/admin.sqlite', '/src/server.js']) {
@@ -149,8 +149,8 @@ test('visitor server never exposes administration, writes, traversal paths or ar
   assert.equal((await f.raw('/my-site/assets/main.js', {}, 'OPTIONS')).status, 405);
   assert.equal((await f.raw('/my-site/', { Host: 'attacker.invalid' })).status, 421);
   assert.equal((await f.raw('/my-site/', { Host: publicHost })).status, 200);
-  publicHost = 'replacement.trycloudflare.com';
-  assert.equal((await f.raw('/my-site/', { Host: 'current.trycloudflare.com' })).status, 421);
+  publicHost = 'replacement.sites.fixture.test';
+  assert.equal((await f.raw('/my-site/', { Host: 'current.sites.fixture.test' })).status, 421);
   assert.equal((await f.raw('/my-site/', { Host: publicHost })).status, 200);
   const health = await f.raw('/_health', { Host: publicHost });
   assert.deepEqual(JSON.parse(health.content), { status: 'ok', mode: 'websites' });

@@ -1,19 +1,7 @@
 import { randomBytes, timingSafeEqual, createHash } from 'node:crypto';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import path from 'node:path';
 import { HttpError } from './store.js';
 import { completeChat, ProviderError } from './provider-chat.js';
 
-export async function bridgeToken(root) {
-  const directory = path.join(root, 'data');
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  const file = path.join(directory, 'model-bridge-token');
-  try { await writeFile(file, randomBytes(32).toString('hex'), { flag: 'wx', mode: 0o600 }); }
-  catch (error) { if (error.code !== 'EEXIST') throw error; }
-  const token = (await readFile(file, 'utf8')).trim();
-  if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('模型桥接认证文件无效。');
-  return token;
-}
 const assistants = {
   general: '你是智作台的 AI 助手。请准确、清晰地回答用户；不确定时如实说明，不编造事实。',
   writing: '你是智作台的写作助手。按用户要求撰写、编辑和润色，保持事实准确，避免编造引用。',
@@ -82,7 +70,7 @@ export class ModelGateway {
       const month = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 7);
       const since = new Date(`${month}-01T00:00:00+08:00`).toISOString();
       const used = this.store.db.prepare('SELECT COALESCE(SUM(total_tokens),0) AS n FROM model_usage WHERE provider_id=? AND started_at>=?').get(row.provider_id, since).n;
-      if (used >= config.monthlyTokenLimit) throw new HttpError(429, '此服务商已达到本机设置的月 Token 限额，请调整限额或选择其他模型。');
+      if (used >= config.monthlyTokenLimit) throw new HttpError(429, '此服务商已达到服务端设置的月 Token 限额，请调整限额或选择其他模型。');
     }
     const started = Date.now();
     this.store.db.prepare('INSERT INTO model_usage(request_id,fingerprint,started_at,provider,model,config_revision,source,status,provider_id,model_key) VALUES (?,?,?,?,?,?,?,?,?,?)').run(input.requestId, fingerprint, new Date(started).toISOString(), config.name, config.model, row.revision, source, 'pending', row.provider_id || null, row.model_key || null);
