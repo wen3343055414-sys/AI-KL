@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#2169ff" />
+    <meta
+      name="description"
+      content="智作台，让想法有处落地。集中管理 AI 对话、常用提示词、知识资料与工作任务。"
+    />
+    <title>智作台 · AI 大模型工作台</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./auth.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <div id="app"></div>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+    <noscript
+      ><main class="no-script">
+        <h1>智作台</h1>
+        <p>请启用 JavaScript，以使用提示词库、本地对话和资料管理。</p>
+      </main></noscript
+    >
+  </body>
+</html>
