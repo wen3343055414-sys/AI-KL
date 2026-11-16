@@ -116,7 +116,7 @@ test('workbench client reaches all three protocols through the authenticated ser
     modelKeys.push(registry.addModel(p.id, { providerRevision: p.revision, modelId: 'fixture-model', name: protocol }).id);
   }
   const gateway = new ModelGateway(adminStore, registry, TOKEN);
-  const { server } = createAdminServer({ root: path.resolve(import.meta.dirname, '..'), settings: { port: 0, bridgeToken: TOKEN }, store: adminStore, modelSettings: registry, modelGateway: gateway, manager: {} });
+  const { server } = createAdminServer({ root: path.resolve(import.meta.dirname, '..'), settings: { port: 0, bridgeToken: TOKEN }, store: adminStore, modelSettings: registry, modelGateway: gateway });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
   const tokenFile = path.join(directory, 'fixture-bridge-token'); await writeFile(tokenFile, TOKEN);

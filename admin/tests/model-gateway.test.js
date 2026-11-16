@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createServer } from 'node:http';
 import { AdminStore } from '../src/store.js';
 import { ModelSettings } from '../src/model-settings.js';
-import { ModelGateway, validateChat, bridgeToken } from '../src/model-gateway.js';
+import { ModelGateway, validateChat } from '../src/model-gateway.js';
 import { completeChat, parseUsage, ProviderError } from '../src/provider-chat.js';
 import { createAdminServer } from '../src/server.js';
 
@@ -118,7 +118,7 @@ test('provider safely reports authentication, balance, redirects, oversized and 
 
 test('internal HTTP routes require the bridge credential and reject browser origins', async t => {
   const f = await fixture(t);
-  const { server } = createAdminServer({ root: path.resolve(import.meta.dirname, '..'), settings: { port: 0 }, store: f.store, modelSettings: f.settings, modelGateway: f.gateway, manager: {} });
+  const { server } = createAdminServer({ root: path.resolve(import.meta.dirname, '..'), settings: { port: 0 }, store: f.store, modelSettings: f.settings, modelGateway: f.gateway });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
   const url = `http://127.0.0.1:${server.address().port}/internal/model/config`;
@@ -126,13 +126,7 @@ test('internal HTTP routes require the bridge credential and reject browser orig
   assert.equal((await fetch(url, { headers: { 'X-Model-Bridge': TOKEN, Origin: 'http://evil.invalid' } })).status, 403);
   const valid = await fetch(url, { headers: { 'X-Model-Bridge': TOKEN } });
   assert.equal(valid.status, 200); assert.equal((await valid.json()).model, 'fixture-model');
-  const internal = url.replace(/config$/, 'runtime');
-  assert.equal((await fetch(internal)).status, 403);
-  const before = await (await fetch(internal, { headers: { 'X-Model-Bridge': TOKEN } })).json();
-  assert.equal(before.draining, false);
-  assert.equal((await fetch(url.replace(/config$/, 'drain'), { method: 'POST', headers: { 'X-Model-Bridge': TOKEN } })).status, 200);
-  const rejected = await fetch(url.replace(/config$/, 'chat'), { method: 'POST', headers: { 'X-Model-Bridge': TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify(input()) });
-  assert.equal(rejected.status, 503);
-  assert.equal((await fetch(url, { headers: { 'X-Model-Bridge': TOKEN } })).status, 200);
-  const created = await bridgeToken(f.directory); assert.match(created, /^[a-f0-9]{64}$/); assert.equal(await bridgeToken(f.directory), created);
+  for (const removed of ['runtime', 'drain']) {
+    assert.equal((await fetch(url.replace(/config$/, removed), { headers: { 'X-Model-Bridge': TOKEN } })).status, 404);
+  }
 });

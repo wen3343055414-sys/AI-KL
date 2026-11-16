@@ -1,6 +1,3 @@
-import { spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
 import http from 'node:http';
 import https from 'node:https';
 import { lookup } from 'node:dns/promises';
@@ -54,35 +51,6 @@ export function validateSettings(input) {
   if (input.clearKey && input.apiKey) throw new HttpError(400, '不能同时输入新密钥并清除密钥。');
   if (!Number.isSafeInteger(input.revision) || input.revision < 0) throw new HttpError(400, '配置版本无效，请刷新后重试。');
   return { name: input.name.trim(), baseUrl: normalizeBaseUrl(input.baseUrl), model: input.model.trim(), authMode: input.authMode, timeoutSeconds: input.timeoutSeconds };
-}
-
-export class WindowsKeyVault {
-  constructor(root, settings) {
-    this.root = root;
-    this.codeRoot = settings.codeRoot || root;
-    this.deploymentRoot = path.resolve(root, settings.deploymentRoot || '../AI-WQS-local');
-  }
-  async transform(operation, value) {
-    const config = JSON.parse((await readFile(path.join(this.deploymentRoot, 'config.json'), 'utf8')).replace(/^\uFEFF/, ''));
-    return new Promise((resolve, reject) => {
-      const child = spawn(config.python, [path.join(this.codeRoot, 'scripts/secret_store.py')], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-      let output = '', done = false;
-      const finish = (error, result) => { if (done) return; done = true; clearTimeout(timer); error ? reject(error) : resolve(result); };
-      const failure = () => new HttpError(503, '本机密钥保护服务暂时不可用，配置未修改。');
-      const timer = setTimeout(() => { child.kill(); finish(failure()); }, 10000);
-      child.on('error', () => finish(failure()));
-      child.stdin.on('error', () => finish(failure()));
-      child.stdout.on('data', chunk => { output += chunk.toString('utf8'); if (output.length > 64000) { child.kill(); finish(failure()); } });
-      child.stderr.resume();
-      child.on('close', code => {
-        try { const result = JSON.parse(output); if (code !== 0 || typeof result.value !== 'string') throw Error(); finish(null, result.value); }
-        catch { finish(failure()); }
-      });
-      child.stdin.end(JSON.stringify({ operation, value }));
-    });
-  }
-  protect(value) { return this.transform('protect', value); }
-  unprotect(value) { return this.transform('unprotect', value); }
 }
 
 export async function probeModels(config, apiKey, { resolver = lookup } = {}) {

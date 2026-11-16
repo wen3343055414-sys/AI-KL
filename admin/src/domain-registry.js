@@ -1,3 +1,4 @@
+import { serviceOrigin } from '../../src/config.js';
 import { randomBytes } from 'node:crypto';
 import { Resolver } from 'node:dns/promises';
 import { request as httpRequest } from 'node:http';
@@ -148,18 +149,9 @@ export async function resolveDomainDns(hostname, { system = systemDns, fallback 
   return { state: result.failed ? 'error' : 'pending', records: parsed.records };
 }
 
-function localOrigin(value) {
-  let url;
-  try { url = new URL(value); } catch { throw new Error('本机工作台地址配置无效。'); }
-  if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) ||
-      url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('本机工作台验证只允许固定的本机 HTTP 地址。');
-  if (url.hostname === 'localhost') url.hostname = '127.0.0.1';
-  return url.origin;
-}
-
 export async function verifyDomainBinding({ hostname, workbenchOrigin }, { resolveDns = resolveDomainDns, requester } = {}) {
   hostname = normalizeDomainHostname(hostname);
-  workbenchOrigin = localOrigin(workbenchOrigin);
+  workbenchOrigin = serviceOrigin(workbenchOrigin, '工作台地址');
   const [dnsResult, local] = await Promise.allSettled([
     resolveDns(hostname), requestJson(new URL('/api/status', workbenchOrigin), { timeout: 2500, requester }),
   ]);
@@ -199,12 +191,12 @@ export async function verifyDomainBinding({ hostname, workbenchOrigin }, { resol
     result.state = 'error'; result.message = 'HTTPS 已连通，但此域名未返回真实工作台状态，请检查转发目标。'; return result;
   }
   if (local.status !== 'fulfilled' || local.value.status !== 200 || local.value.data?.mode !== 'server' || !/^[a-f0-9]{32}$/.test(local.value.data?.serverId || '')) {
-    result.state = 'error'; result.message = '无法读取本机工作台实例，请先启动本机工作台后重新检测。'; return result;
+    result.state = 'error'; result.message = '无法读取目标工作台实例，请先启动目标工作台后重新检测。'; return result;
   }
   if (local.value.data.serverId !== remote.data.serverId) {
-    result.state = 'error'; result.message = '此域名指向另一工作台实例，与当前本机工作台不一致。'; return result;
+    result.state = 'error'; result.message = '此域名指向另一工作台实例，与当前目标工作台不一致。'; return result;
   }
-  result.state = 'active'; result.message = 'DNS、HTTPS 证书与本机工作台实例验证通过。';
+  result.state = 'active'; result.message = 'DNS、HTTPS 证书与目标工作台实例验证通过。';
   return result;
 }
 
@@ -222,9 +214,9 @@ function safeVerification(value) {
 }
 
 export class DomainRegistry {
-  constructor(store, { workbenchOrigin = 'http://127.0.0.1:3000', verifier = verifyDomainBinding } = {}) {
+  constructor(store, { workbenchOrigin = process.env.WORKBENCH_ORIGIN || 'http://127.0.0.1:3000', verifier = verifyDomainBinding } = {}) {
     this.store = store; this.db = store.db;
-    this.workbenchOrigin = localOrigin(workbenchOrigin);
+    this.workbenchOrigin = serviceOrigin(workbenchOrigin, '工作台地址');
     this.verifier = verifier; this.checking = new Set();
     this.db.exec(`CREATE TABLE IF NOT EXISTS ai_domain_bindings (
       id TEXT PRIMARY KEY, hostname TEXT NOT NULL UNIQUE, revision INTEGER NOT NULL,

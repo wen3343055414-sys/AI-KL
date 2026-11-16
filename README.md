@@ -1,169 +1,84 @@
 # 智作台 · 中文 AI 工作台
 
-把会话、提示词、知识资料和任务放在同一个工作空间。智作台提供中文界面、账号登录、SQLite 数据保存，以及从 GitHub 到本机 Docker 的自动更新流程。
+把会话、提示词、知识资料、任务与内置工具放在同一个工作空间。保留完整工作台、账号登录、数据同步、真实模型调用和独立管理服务，运行方式不依赖特定电脑或托管商。
 
-> 本页对应完整发布分支 **`main`**：账号注册、账号／邮箱密码登录、数据后端和独立 Windows 服务端统一维护。配置可用模型接口后，工作台发送真实文本对话并统计 Token；已有演示历史保留标记。仅安装和浏览工作台不需要 API 密钥。
+## 功能
 
-## 功能概览
+- 多轮对话与历史搜索、继续对话、复制导出、重新请求和模型选择。
+- 提示词编辑、分类与收藏，知识资料文本读取、搜索和带入对话。
+- 任务清单、工作空间搜索、Unicode 文本统计与 JSON 导入导出。
+- 账号与邮箱密码登录、账号隔离、SQLite 持久保存、跨页面同步、离线缓存及冲突处理。
+- 多服务商与多模型管理，OpenAI 兼容、Anthropic Messages、Gemini 文本协议，加密凭据、实际 Token 统计和月限额。
+- 独立管理登录、操作记录、网站草稿/发布快照/模型生成接口，以及域名 DNS、HTTPS 与工作台实例验证。
+- 深色主题、手机布局、侧栏收起与展开。保留旧工作空间、演示历史标记和账号兼容。
 
-| 功能 | 当前主分支支持 |
-| --- | --- |
-| 对话与历史 | 真实模型文本对话（需配置独立服务端）、按会话查看历史、正文搜索、继续对话、复制导出与请求重试 |
-| 提示词 | 模板浏览、编辑、分类与收藏，常用提示词显示在首页 |
-| 知识资料 | 添加资料、阅读 UTF-8 文本、搜索正文、将资料带入对话输入框 |
-| 全局搜索 | 搜索提示词、历史对话、资料与对话请求，支持 `Ctrl / ⌘ + K` |
-| 账号与工作空间 | 注册、账号或邮箱密码登录，每个账号使用独立工作空间，兼容旧版密码用户 |
-| 数据与同步 | SQLite 持久保存、自动保存、同账号跨页面同步、冲突处理和 JSON 导入导出 |
-| 界面与运维 | 深色主题、手机布局、同步状态、运行版本、数据库备份与代码回退 |
-| 模型与服务端 | 多服务商、多模型选择、独立加密密钥、实际 Token 用量、月限额、服务启停、日志及局域网入口 |
+手机短信、邮箱验证、邮件找回及第三方登录尚未接入，界面会如实提示。
 
-## 快速开始（Linux）
+## 运行入口
 
-### 1. 准备环境
-
-安装 Git、Python 3 和 Docker Desktop for Linux（Compose 2.33.1+），打开 Docker Desktop 并等待引擎就绪。自动更新还需要可用的 `systemd` 用户服务。以日常使用 Docker Desktop 的用户运行安装命令；Node.js 由容器提供，无需在本机单独安装。项目显式使用 IPv4 容器网络，匹配后端和 Windows 模型桥接；不修改 Docker Desktop 全局网络设置。
-
-### 2. 安装主分支
-
-```bash
-git clone --branch main https://github.com/wen3343055414-sys/AI---WQS.git
-cd AI---WQS
-bash scripts/install-local-server.sh --branch main
-```
-
-安装程序配置 `ai-wqs-server` 项目、`frontend`／`backend` 容器及后台更新定时器。首次部署需要等待当前提交的 GitHub 验收通过；尚未通过时，定时器会继续检查。
-
-### 3. 打开工作台
-
-访问 [http://127.0.0.1:3000](http://127.0.0.1:3000)。首次访问注册账号与邮箱，设置 **10–128 个字符**的密码；之后可用账号密码或邮箱密码登录。旧版密码用户使用账号 `admin` 和原密码，原有数据保留。
-
-安装命令可追加以下参数：
-
-| 参数 | 用途 |
-| --- | --- |
-| `--port 3001` | 改用端口 3001，访问地址相应调整 |
-| `--bind 0.0.0.0` | 允许局域网连接，其他设备使用本机局域网 IP 和端口登录 |
-| `--no-systemd` | 手动运行，不安装后台更新定时器 |
-
-默认仅监听本机。局域网连接还取决于防火墙和网络设置。已有安装的分支、数据目录与维护方式见 [服务器使用指南](docs/local-server.md)。
-
-## 新对话与历史对话
-
-侧栏“首页”上方的 **新对话** 直接打开空白会话，原右上角“新建”入口已移除。“历史对话”按最近更新排序，同一会话的多次请求归为一条记录；可搜索标题和消息正文、继续原对话或导出会话。首页同步显示最近对话，侧栏不再展示原数据说明卡片。
-
-原 `#tasks` 链接继续打开历史对话。此调整不删除已有会话、消息或底层请求记录，完整工作空间备份仍包含原数据。
-
-## 任务、插件与使用帮助
-
-侧栏的 **任务** 位于首页上方，支持新建、编辑、标记完成、恢复待办、按状态筛选、搜索名称和备注，以及确认后删除。任务清单与模型请求记录分别保存，已有对话继续保留。
-
-**插件** 位于历史对话上方，提供工作空间搜索、文本统计和 JSON 数据导出三个内置工具，可按需启用或停用。任务清单和插件启用偏好随当前账号保存、同步，并包含在完整备份中；旧版工作空间和备份仍可读取。
-
-原右上角的问号帮助入口已移动至 **设置 → 使用帮助**。任务清单用于管理待办，不会自动执行或定时调用模型。
-
-左上角“工作空间”左侧提供 **收起侧边栏 / 展开侧边栏** 按钮。桌面端收起后内容区扩展宽度，当前浏览器会记住显示状态；手机端可用同一按钮展开和收起导航，也可点击遮罩或按 Esc 关闭。
-
-## 账号与数据保存
-
-- **账号隔离**：同一账号在不同设备登录后读取相同工作空间，新账号的数据彼此独立。旧版兼容账号首次登录空工作空间时，可迁入同一站点的有效旧浏览器数据。
-- **登录方式**：账号与邮箱密码登录可用。手机验证码入口已提供，短信服务尚未接入；邮箱目前用于登录标识，邮箱验证与邮件找回密码尚未接入。详见 [账户登录与注册](docs/authentication.md)。
-- **保存位置**：本机服务器模式将业务数据保存在 Docker 持久卷中，容器重建后继续保留；静态部署使用当前浏览器存储。
-- **资料范围**：TXT、Markdown、CSV、JSON 支持 UTF-8 正文读取，每个文件不超过 1 MB，正文合计不超过 150 万字符；其他格式仅保存文件信息。完整容量限制见 [服务器使用指南](docs/local-server.md)。
-
-GitHub 保存应用代码和公开开发摘要。密码、数据库、业务内容、API 密钥与聊天全文不进入公开仓库。
-
-## 自动更新与数据同步
-
-```mermaid
-flowchart LR
-    Dev[GPT / Codex 任务分支开发] --> Push[经 PR 审阅合入 main]
-    Push --> CI[同一提交的 push CI 验收成功]
-    CI --> Timer[本机定时器检查更新]
-    Timer --> Deploy[备份并更新 Docker 服务]
-    Deploy --> Front[Nginx 前端]
-    Front <--> Back[Node.js 后端]
-    Back <--> DB[(SQLite 持久卷)]
-    Deploy --> Admin[Windows 独立服务端]
-    Back <--> Admin
-```
-
-- **代码更新**：本机发布跟随 `main`，约每分钟检查。任务分支的修改需经 PR 合入 `main`，并通过该 SHA 的 push CI，才会进入更新流程；还需构建和健康检查时间，不保证提交后立即上线。
-- **数据同步**：页面自动保存修改，其他已登录页面约每 8 秒检查更新。离线修改保留待发送缓存，恢复连接后重试；发生并发冲突时保留本页内容并提示选择。
-- **版本切换**：没有未完成输入时，浏览器自动刷新到新版本；正在编辑时保留输入并提示刷新。
-- **备份与回退**：工作空间数据库升级前及每天备份，保留最近 30 份；Windows 管理数据库在升级前另建快照。新版启动失败时恢复上一代码版本，保留当前业务数据。
-
-自动更新需要本机已完成安装、电脑开机、Docker 引擎运行且能够访问 GitHub。Docker Desktop 依赖用户登录会话；休眠、断电或退出登录期间不保证持续服务。云端提交代码后，由本机定时器执行部署。
-
-## 日常维护
-
-以下命令用于默认 Linux 安装：
-
-```bash
-# 查看当前版本与更新日志
-python3 ~/.local/share/ai-wqs-server/deployer.py status
-systemctl --user status ai-wqs-update.timer
-journalctl --user -u ai-wqs-update.service -n 60
-
-# 立即检查更新、备份数据库、回退上一代码版本
-python3 ~/.local/share/ai-wqs-server/deployer.py update
-python3 ~/.local/share/ai-wqs-server/deployer.py backup
-python3 ~/.local/share/ai-wqs-server/deployer.py rollback
-
-# 暂停或恢复自动更新
-systemctl --user stop ai-wqs-update.timer
-systemctl --user start ai-wqs-update.timer
-```
-
-自定义 `XDG_DATA_HOME` 时，使用对应的数据目录。数据库快照默认仍在同一电脑，可在设置中导出 JSON 并另存备份。需要长期停止服务时，先暂停定时器，再在 Docker Desktop 中停止 `ai-wqs-server`；保留持久卷即可保留数据库。
-
-## 本地开发与验证
-
-直接运行源码需要 **Node.js 24.10.0 及以上的 24.x 版本**，运行时无第三方依赖：
+需要 **Node.js 24.10.0 及以上的 24.x**。生产代码只使用 Node.js 内置模块；数据服务需要可写的持久化目录。
 
 ```bash
 npm ci
-npm start             # http://127.0.0.1:3000，数据库默认在 ./data
+npm start
 ```
 
-开发时可用 `npm run dev` 监听源码变化。提交前运行：
+`npm start` 提供完整工作台页面与数据 API；`npm run dev` 用于开发时监听源码变化。通过运行环境注入配置，变量名称见 [.env.example](.env.example)。程序也支持读取仓库根目录的 `.env`，真实配置不提交仓库。
+
+独立模型与管理服务使用：
+
+```bash
+npm run start:admin
+```
+
+两项服务可以运行在同一环境，也可以分别交付。工作台通过 `MODEL_GATEWAY_URL` 访问管理服务的 `/internal/model`，双方使用相同的 `MODEL_BRIDGE_TOKEN` 或对应的秘密文件。服务地址支持 HTTP/HTTPS 和自定义主机名。跨公网连接使用 HTTPS。
+
+使用模型凭据前，为管理服务设置 `SECRET_ENCRYPTION_KEY` 或 `SECRET_ENCRYPTION_KEY_FILE`，再在管理页面添加服务商与模型。以下命令可生成一个 32 字节随机值；桥接令牌和加密主密钥分别生成、分别保管：
+
+```bash
+node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+管理页通过 `ADMIN_ORIGIN` 配置实际访问来源，`ADMIN_ALLOWED_HOSTS` 可补充内部连接所用的 Host。HTTPS 来源自动启用管理会话 Secure Cookie。不要将服务商 API 密钥放入工作台前端。
+
+## 可移植性与数据
+
+- 完整服务适用于提供 Node.js 24 长运行进程、网络与持久磁盘的环境。监听地址、端口、数据目录、版本和服务来源均可配置。
+- 平台提供的反向代理保留原始 Host 与 Origin；TLS、进程管理、日志收集和发布由目标平台负责。详见 [运行配置](docs/runtime.md)。
+- `DATA_DIR` 保存工作台账号、会话和工作空间；`ADMIN_DATA_DIR` 保存管理账号、模型设置、用量、网站与域名。迁移时停止写入后搬迁数据库目录，并保留相同的加密主密钥和服务桥接令牌。
+- 旧系统专用格式的模型密文不能直接跨系统解密，迁移后需重新输入相应连接的 API 密钥；账号、模型目录、用量及业务内容保持原有数据库结构。
+- 程序不会安装操作系统服务、修改防火墙、操作主机容器或自动更新自身。数据库快照工具与工作空间 JSON 导入导出继续保留。
+
+## 静态交付
+
+```bash
+npm run build
+```
+
+构建结果在 `dist/`，使用相对资源路径和 hash 导航，可交付给任意支持静态文件的托管服务。`deploy-pages.yml` 是仅发布 `dist/` 的可选工作流示例。
+
+静态模式保存当前浏览器的数据；账号登录、服务端同步和真实模型调用需要完整后端。纯静态托管和无持久磁盘的函数环境不能直接提供 SQLite 完整服务。
+
+## 验证
 
 ```bash
 npm test
-python3 -m unittest discover -s tests -p 'test_*.py'
+npm --prefix admin test
 node scripts/check-source.mjs
 npm run build
-docker compose config --quiet
 ```
 
-手动启动 Docker 可运行 `bash scripts/start-linux.sh`；该方式不安装后台更新定时器。前端挂载开发模式可运行：
+`npm test` 包含工作台和管理服务测试。`ci.yml` 保留跨系统应用验收与浏览器验收示例，放入 `.github/workflows/` 后可用于 GitHub Actions。浏览器验证使用 `scripts/auth-ui-check.mjs`，工具依赖独立安装，不进入生产依赖。
 
-```bash
-docker --context desktop-linux compose -f compose.yaml -f compose.dev.yaml up --build --detach --wait
-```
+## 目录
 
-GitHub CI 验证应用、Python 更新器规则、前后端容器 HTTP 行为及登录界面。`GET /api/health` 用于健康检查，`GET /api/status` 提供版本与登录状态，工作空间接口需要登录。
+| 路径 | 内容 |
+| --- | --- |
+| `public/` | 工作台界面、账号交互、浏览器缓存与同步 |
+| `src/` | HTTP 服务、账号与工作空间 SQLite、模型客户端、数据库快照 |
+| `admin/` | 独立管理界面、模型配置与协议、用量、网站与域名业务 |
+| `scripts/` | 静态构建、源码检查及界面验收 |
+| `tests/`、`admin/tests/` | 应用和业务回归测试 |
+| `docs/` | 账号、运行配置、模型与开发说明 |
 
-Windows 运行 `python -m unittest discover -s tests -p 'test_windows_*.py'`，另运行 `python -m unittest discover -s admin/tests -p 'test_*.py'`；Windows 密钥测试可通过 `AI_WQS_TEST_PYTHON` 指定实际 Python 路径。
-
-## 静态部署
-
-`npm run build` 生成 `dist/`，可用于静态托管。GitHub Pages 需先在仓库 **Settings → Pages → Source** 选择 **GitHub Actions**，再使用“部署 GitHub Pages”工作流发布构建产物。
-
-静态版本使用浏览器存储，可展示界面和保存浏览器数据。账号登录、数据库、真实模型对话和自动更新依赖后端与对应服务端；静态托管不会启动 Node.js、SQLite、Docker 或保管模型密钥。
-
-## Windows 管理端与真实模型接入
-
-完整发布源码包含独立 Windows 管理服务，入口为 [http://127.0.0.1:3100](http://127.0.0.1:3100)，工作台入口为 [http://127.0.0.1:3000](http://127.0.0.1:3000)：
-
-- 独立 Windows 管理服务，提供服务启停、日志、备份、版本更新和局域网入口管理。
-- 多服务商与多模型设置，支持 OpenAI 兼容、Anthropic Messages 和 Gemini 原生文本协议；配置可用模型后，工作台使用真实模型对话。
-- Windows DPAPI 本机密钥保管、实际 Token 用量统计与月限额。
-
-安装与运行要求见 [服务端说明](admin/README.md) 和 [代码同步说明](docs/source-sync.md)。Linux 安装入口部署工作台前后端，Windows 管理服务依赖 DPAPI 与任务计划。原安装从 `codex/gpt-docker-github` 切换到 `main` 前，目标必须包含当前发布历史及完整服务源码；不能跳过分叉检查。
-
-## 项目文档
-
-- [服务器使用指南](docs/local-server.md)：安装配置、数据边界、接口、备份与回退。
-- [账户登录与注册](docs/authentication.md)：账号规则、旧用户迁移与短信状态。
-- [开发与本机服务协作](docs/development-workflow.md)：提交、GitHub 验收与本机部署流程。
-- [项目工作与保存规则](AGENTS.md)：验证、公开工作日志、任务分支和 PR 交付约定。
+[账号说明](docs/authentication.md) · [管理服务](admin/README.md) · [多模型说明](docs/multi-model-settings.md) · [开发流程](docs/development-workflow.md) · [项目工作规则](AGENTS.md)

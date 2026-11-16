@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 
 // Check precisely the source intended for GitHub, never runtime directories.
 const files = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' }).split('\0').filter(Boolean);
 const failures = [];
 for (const file of new Set(files)) {
+  if (!existsSync(file)) continue;
   if (/(^|\/)(data|node_modules|outputs|releases|integrated|work|\.codex|\.aws)\//.test(file) || /(^|\/)\.env(\.|$)/.test(file) && !file.endsWith('.env.example') || /\.(sqlite(?:-wal|-shm)?|log|pem|key)$/.test(file) || /(^|\/)(config\.json|scheduled-task\.xml|model-bridge-token)$/.test(file)) {
     failures.push(`${file}: runtime or credential file`);
     continue;

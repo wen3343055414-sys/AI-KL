@@ -171,11 +171,12 @@ test('unsafe DNS prevents an HTTPS request and ngrok warning headers apply only 
   }
 });
 
-test('malformed verifier results and local-origin overrides cannot manufacture a usable origin', async t => {
+test('malformed verifier results and invalid target origins cannot manufacture a usable origin', async t => {
   const { registry } = await fixture(t, async () => ({ ...active(), dns: { state: 'resolved', records: [{ type: 'A', value: '198.18.0.113' }] } }));
   const domain = registry.add({ hostname: HOST });
   const checked = await registry.verify(domain.id, { revision: domain.revision });
   assert.equal(checked.verification.state, 'error'); assert.equal(registry.defaultOrigin(), null);
-  assert.throws(() => new DomainRegistry(registry.store, { workbenchOrigin: 'http://169.254.169.254' }), /本机/);
-  assert.throws(() => new DomainRegistry(registry.store, { workbenchOrigin: 'http://127.0.0.1:3000/private' }), /本机/);
+  assert.equal(new DomainRegistry(registry.store, { workbenchOrigin: 'https://workbench.my-real-site.com' }).workbenchOrigin, 'https://workbench.my-real-site.com');
+  assert.equal(new DomainRegistry(registry.store, { workbenchOrigin: 'http://workbench:3000' }).workbenchOrigin, 'http://workbench:3000');
+  assert.throws(() => new DomainRegistry(registry.store, { workbenchOrigin: 'http://127.0.0.1:3000/private' }), /工作台地址/);
 });

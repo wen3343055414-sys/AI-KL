@@ -227,7 +227,7 @@ test('monthly budget and daily usage change at midnight in Beijing rather than U
 
 test('registry HTTP operations retain independent authentication and CSRF checks', async t => {
   const { registry, store } = await fixture(t);
-  const { server } = createAdminServer({ root: path.resolve(import.meta.dirname, '..'), settings: { port: 0 }, store, modelSettings: registry, manager: {} });
+  const { server } = createAdminServer({ root: path.resolve(import.meta.dirname, '..'), settings: { port: 0 }, store, modelSettings: registry });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
   const base = `http://127.0.0.1:${server.address().port}`;

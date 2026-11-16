@@ -6,10 +6,10 @@ import { ModelClient } from "./model-client.js";
 
 process.umask(0o077);
 const store = new WorkspaceStore(process.env.DATA_DIR || "./data");
-const runtimeVersion = (process.env.APP_VERSION || "0.3.0-local") + (process.env.MODEL_GATEWAY_URL ? '-models-v1' : '');
+const runtimeVersion = process.env.APP_VERSION || "0.3.0";
 const api = createApi(store, runtimeVersion, new ModelClient(store));
 
-const host = process.env.HOST ?? "127.0.0.1";
+const host = process.env.HOST ?? "0.0.0.0";
 const portValue = process.env.PORT ?? "3000";
 if (!host.trim() || !/^\d+$/.test(portValue) || Number(portValue) > 65535) {
   console.error("配置错误：HOST 不能为空；PORT 必须为 0–65535 的整数。");

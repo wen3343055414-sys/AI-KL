@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { request as httpRequest } from 'node:http';
@@ -9,14 +9,10 @@ import { createAdminServer } from '../src/server.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const PASSWORD = 'fixture-admin-password-2026';
-async function fixture(t, managerOverrides = {}) {
+async function fixture(t, settings = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'ai-admin-test-'));
   const store = new AdminStore(directory);
-  const calls = [];
-  const manager = { overview: async () => ({ containers: [], stats: [] }), logs: async () => 'fixture log',
-    action: async action => { calls.push(action); return { message: '操作完成', output: 'fixture output' }; },
-    ...managerOverrides };
-  const { server } = createAdminServer({ root, settings: { port: 0 }, store, manager });
+  const { server } = createAdminServer({ root, settings: { port: 0, ...settings }, store });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   let cookie = '', csrf = '';
@@ -34,7 +30,7 @@ async function fixture(t, managerOverrides = {}) {
   }
   const setup = () => request('/api/setup', { method: 'POST', body: { password: PASSWORD } });
   t.after(async () => { await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }); store.close(); await rm(directory, { recursive: true, force: true }); });
-  return { request, setup, store, directory, calls, base };
+  return { request, setup, store, directory, base };
 }
 
 test('health is public; service data and operations require independent admin login', async t => {
@@ -43,7 +39,6 @@ test('health is public; service data and operations require independent admin lo
   assert.equal((await f.request('/api/session')).data.setupRequired, true);
   for (const endpoint of ['/api/overview', '/api/logs', '/api/backups/workspace-test.sqlite', '/api/model-settings']) assert.equal((await f.request(endpoint)).status, 401);
   assert.equal((await f.request('/api/actions', { method: 'POST', body: { action: 'stop', confirmation: 'stop' } })).status, 401);
-  assert.deepEqual(f.calls, []);
 });
 
 test('setup validates origin and password, saves a hash, and sets a protected session cookie', async t => {
@@ -68,37 +63,14 @@ test('login checks the independent password and logout invalidates the old cooki
   assert.equal((await f.request('/api/overview')).status, 200);
 });
 
-test('operations reject missing CSRF, foreign origins, shell commands, and unknown actions', async t => {
+test('model settings reject missing CSRF and foreign origins; retired controls have no route', async t => {
   const f = await fixture(t); await f.setup();
-  const body = { action: 'stop', confirmation: 'stop' };
-  assert.equal((await f.request('/api/actions', { method: 'POST', body, headers: { 'X-Admin-CSRF': '' } })).status, 403);
-  assert.equal((await f.request('/api/actions', { method: 'POST', body, headers: { 'X-Admin-CSRF': 'é'.repeat(48) } })).status, 403);
-  assert.equal((await f.request('/api/actions', { method: 'POST', body, headers: { Origin: 'https://evil.invalid' } })).status, 403);
-  assert.equal((await f.request('/api/actions', { method: 'POST', body: { action: 'docker rm -f all', confirmation: 'docker rm -f all' } })).status, 400);
-  assert.equal((await f.request('/api/actions', { method: 'POST', body: { action: 'stop' } })).status, 400);
-  assert.deepEqual(f.calls, []);
-});
-
-test('concurrent actions are excluded and the completed job and audit persist', async t => {
-  let finish;
-  const f = await fixture(t, { action: () => new Promise(resolve => { finish = resolve; }) }); await f.setup();
-  assert.equal((await f.request('/api/actions', { method: 'POST', body: { action: 'backup', confirmation: 'backup' } })).status, 202);
-  assert.equal((await f.request('/api/actions', { method: 'POST', body: { action: 'stop', confirmation: 'stop' } })).status, 409);
-  finish({ message: '已备份', output: 'snapshot.sqlite' });
-  await new Promise(resolve => setImmediate(resolve));
-  const overview = (await f.request('/api/overview')).data;
-  assert.equal(overview.jobs[0].status, 'success');
-  assert.equal(overview.jobs[0].output, 'snapshot.sqlite');
-  assert.ok(overview.audit.some(row => row.action === 'backup' && row.result === 'success'));
-});
-
-test('failed operations report failure without claiming success', async t => {
-  const f = await fixture(t, { action: async () => { throw new Error('Docker is unavailable'); } }); await f.setup();
-  await f.request('/api/actions', { method: 'POST', body: { action: 'start', confirmation: 'start' } });
-  await new Promise(resolve => setImmediate(resolve));
-  const overview = (await f.request('/api/overview')).data;
-  assert.equal(overview.jobs[0].status, 'failed');
-  assert.equal(overview.jobs[0].message, 'Docker is unavailable');
+  const body = {};
+  assert.equal((await f.request('/api/model-settings', { method: 'POST', body, headers: { 'X-Admin-CSRF': '' } })).status, 403);
+  assert.equal((await f.request('/api/model-settings', { method: 'POST', body, headers: { 'X-Admin-CSRF': 'é'.repeat(48) } })).status, 403);
+  assert.equal((await f.request('/api/model-settings', { method: 'POST', body, headers: { Origin: 'https://evil.invalid' } })).status, 403);
+  assert.equal((await f.request('/api/actions', { method: 'POST', body: { action: 'arbitrary-command', confirmation: 'arbitrary-command' } })).status, 404);
+  assert.equal((await f.request('/api/actions', { method: 'POST', body: { action: 'stop' } })).status, 404);
 });
 
 test('source files, configuration, database and path traversal are never static assets', async t => {
@@ -132,34 +104,19 @@ test('DNS rebinding hosts and expired sessions are rejected', async t => {
   assert.equal((await f.request('/api/overview')).status, 401);
 });
 
-test('backup downloads use attachments, are audited and remove the temporary copy', async t => {
-  let cleaned = false;
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'admin-backup-fixture-'));
-  const file = path.join(directory, 'snapshot.sqlite'); await writeFile(file, 'SQLite fixture');
-  const f = await fixture(t, { downloadBackup: async () => ({ file, size: 14, cleanup: async () => { cleaned = true; await rm(directory, { recursive: true, force: true }); } }) }); await f.setup();
-  const downloaded = await f.request('/api/backups/workspace-fixture123.sqlite');
-  assert.equal(downloaded.status, 200);
-  assert.match(downloaded.response.headers.get('content-disposition'), /attachment/);
-  assert.equal(downloaded.data, 'SQLite fixture');
-  await new Promise(resolve => setTimeout(resolve, 20));
-  assert.ok(cleaned);
-  assert.ok(f.store.audits().some(row => row.action === 'download'));
-});
-
-test('request bodies and log bounds are validated', async t => {
+test('request bodies are bounded and retired host endpoints stay unavailable', async t => {
   const f = await fixture(t); await f.setup();
-  assert.equal((await f.request('/api/logs?lines=999999')).status, 400);
-  assert.equal((await f.request('/api/logs?lines=abc')).status, 400);
-  assert.equal((await f.request('/api/actions', { method: 'POST', body: '{broken' })).status, 400);
-  assert.equal((await f.request('/api/actions', { method: 'POST', body: { value: 'x'.repeat(9000) } })).status, 413);
+  for (const endpoint of ['/api/logs', '/api/backups/snapshot.sqlite', '/api/domain-access']) assert.equal((await f.request(endpoint)).status, 404);
+  assert.equal((await f.request('/api/model-settings', { method: 'POST', body: '{broken' })).status, 400);
+  assert.equal((await f.request('/api/model-settings', { method: 'POST', body: { value: 'x'.repeat(9000) } })).status, 413);
 });
 
-test('owner and sessions survive restart; interrupted jobs are marked honestly', async t => {
+test('owner and sessions survive restart', async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'admin-store-test-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   let store = new AdminStore(directory); await store.setup(PASSWORD);
-  const session = store.createSession(); store.createJob('update'); store.close();
+  const session = store.createSession(); store.close();
   store = new AdminStore(directory);
   assert.ok(await store.checkPassword(PASSWORD)); assert.ok(store.session(session.token));
-  assert.equal(store.jobs()[0].status, 'interrupted'); store.close();
+  store.close();
 });

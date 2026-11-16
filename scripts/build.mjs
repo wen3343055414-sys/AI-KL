@@ -19,4 +19,4 @@ for (const name of [
   );
 }
 await writeFile(new URL(".nojekyll", output), "");
-console.log("静态站点已构建到 dist/，支持 GitHub Pages 项目子路径。");
+console.log("静态站点已构建到 dist/，可交付给静态托管服务，支持项目子路径。");

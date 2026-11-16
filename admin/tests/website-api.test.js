@@ -19,17 +19,15 @@ async function fixture(t) {
   const store = new AdminStore(directory), websites = new WebsiteStore(store);
   const visitor = createWebsiteServer({ websites, allowedHost: hostname => hostname === 'fixture.example' });
   await new Promise(resolve => visitor.listen(0, '127.0.0.1', resolve));
-  const localOrigin = `http://127.0.0.1:${visitor.address().port}`;
-  const tunnel = { status: () => ({ state: 'stopped', enabled: false, installed: true, url: null }),
-    start: async () => ({ state: 'starting' }), stop: async () => ({ state: 'stopped' }) };
-  const websiteRuntime = { available: true, localOrigin, tunnel,
-    status() { return { available: this.available, localOrigin, publicOrigin: null, tunnel: tunnel.status() }; } };
+  const origin = `http://127.0.0.1:${visitor.address().port}`;
+  const websiteRuntime = { available: true, origin,
+    status() { return { available: this.available, origin, state: this.available ? 'ready' : 'stopped' }; } };
   let modelReply = async () => generated();
   const modelCalls = [];
   const modelGateway = { active: 0, authorized: () => false, config: () => ({ ready: true, models: [{ key: 'model_fixture', name: 'Fixture' }] }),
     async chat(input, source) { modelCalls.push({ input, source }); return modelReply(input); } };
   const { server } = createAdminServer({ root: path.resolve(import.meta.dirname, '..'), store, websites, websiteRuntime,
-    settings: { port: 0 }, manager: {}, modelSettings: {}, modelGateway });
+    settings: { port: 0 }, modelSettings: {}, modelGateway });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   let cookie = '', csrf = '';
@@ -50,14 +48,14 @@ async function fixture(t) {
   const post = (url, body, headers) => request(url, { method: 'POST', body, headers });
   const setup = () => post('/api/setup', { password: 'fixture-independent-admin-password' });
   const create = async () => { const result = await post('/api/websites', draft()); assert.equal(result.status, 201); return result.data; };
-  return { request, post, setup, create, localOrigin, websites, websiteRuntime, modelCalls,
+  return { request, post, setup, create, origin, websites, websiteRuntime, modelCalls,
     replyWith: implementation => { modelReply = implementation; } };
 }
 
 test('website administration requires independent login, matching origin and session CSRF', async t => {
   const f = await fixture(t);
   const health = (await f.request('/api/health')).data;
-  assert.deepEqual(health.websites, { available: true, localOrigin: f.localOrigin, publicOrigin: null, state: 'stopped' });
+  assert.deepEqual(health.websites, { available: true, origin: f.origin, state: 'ready' });
   assert.equal(health.sites, undefined); assert.equal(health.csrf, undefined);
   assert.equal((await f.request('/api/websites')).status, 401);
   assert.equal((await f.post('/api/websites', draft())).status, 401);
@@ -77,11 +75,11 @@ test('saved drafts preview through the visitor origin; publishing and exports us
   const f = await fixture(t); await f.setup();
   let site = await f.create();
   const listing = (await f.request('/api/websites')).data;
-  assert.equal(listing.hosting.localOrigin, f.localOrigin); assert.equal(listing.hosting.available, true);
+  assert.equal(listing.hosting.origin, f.origin); assert.equal(listing.hosting.available, true);
   assert.equal(listing.sites[0].files, undefined);
-  assert.equal((await fetch(`${f.localOrigin}/${site.slug}/`)).status, 404);
+  assert.equal((await fetch(`${f.origin}/${site.slug}/`)).status, 404);
   const preview = await f.post(`/api/websites/${site.id}/preview`, { revision: site.revision });
-  assert.equal(preview.status, 200); assert.ok(preview.data.url.startsWith(f.localOrigin + '/__preview/'));
+  assert.equal(preview.status, 200); assert.ok(preview.data.url.startsWith(f.origin + '/__preview/'));
   const previewHome = await fetch(preview.data.url);
   assert.match(await previewHome.text(), /Published original/);
   assert.ok(!previewHome.headers.get('content-security-policy').includes('allow-same-origin'));
@@ -91,15 +89,15 @@ test('saved drafts preview through the visitor origin; publishing and exports us
   assert.equal(exported.data.schemaVersion, 1); assert.equal(exported.data.files[1].path, 'app.js');
   site = (await f.post(`/api/websites/${site.id}/publish`, { revision: site.revision })).data;
   assert.equal(site.published, true); assert.equal(site.publishedRevision, site.revision);
-  const home = await fetch(`${f.localOrigin}/${site.slug}/`);
+  const home = await fetch(`${f.origin}/${site.slug}/`);
   assert.equal(home.status, 200); assert.match(await home.text(), /Published original/);
   assert.match(home.headers.get('content-security-policy'), /sandbox allow-scripts/);
   assert.ok(home.headers.get('content-security-policy').includes('allow-same-origin'));
   assert.equal(home.headers.get('access-control-allow-credentials'), null);
-  for (const endpoint of ['/api/session', '/api/websites', '/api/model-providers', '/internal/model/config', '/config.json']) assert.equal((await fetch(f.localOrigin + endpoint)).status, 404, endpoint);
+  for (const endpoint of ['/api/session', '/api/websites', '/api/model-providers', '/internal/model/config', '/config.json']) assert.equal((await fetch(f.origin + endpoint)).status, 404, endpoint);
   site = (await f.post(`/api/websites/${site.id}`, { ...site, files: [{ path: 'index.html', content: '<h1>Unpublished changes</h1>' }] })).data;
   assert.notEqual(site.publishedRevision, site.revision);
-  assert.match(await (await fetch(`${f.localOrigin}/${site.slug}/`)).text(), /Published original/);
+  assert.match(await (await fetch(`${f.origin}/${site.slug}/`)).text(), /Published original/);
   f.websiteRuntime.available = false;
   assert.equal((await f.post(`/api/websites/${site.id}/publish`, { revision: site.revision })).status, 503);
   assert.equal((await f.post(`/api/websites/${site.id}/preview`, { revision: site.revision })).status, 503);
@@ -117,9 +115,9 @@ test('website generation calls the injected model and saves only a draft without
   assert.equal(f.modelCalls.length, 1); assert.equal(f.modelCalls[0].source, 'website');
   assert.equal(f.modelCalls[0].input.modelKey, 'model_fixture');
   assert.ok(f.modelCalls[0].input.messages[0].content.includes('Change the website heading'));
-  assert.match(await (await fetch(`${f.localOrigin}/${site.slug}/`)).text(), /Published original/);
+  assert.match(await (await fetch(`${f.origin}/${site.slug}/`)).text(), /Published original/);
   assert.equal((await f.post(`/api/websites/${site.id}/publish`, { revision: result.data.site.revision })).status, 200);
-  assert.match(await (await fetch(`${f.localOrigin}/${site.slug}/`)).text(), /Generated draft/);
+  assert.match(await (await fetch(`${f.origin}/${site.slug}/`)).text(), /Generated draft/);
 });
 
 test('malformed or truncated model output and stale requests leave drafts and published snapshots intact', async t => {
@@ -144,5 +142,5 @@ test('malformed or truncated model output and stale requests leave drafts and pu
   resolveModel(generated());
   assert.equal((await pending).status, 409);
   assert.deepEqual(f.websites.get(site.id), saved.data);
-  assert.match(await (await fetch(`${f.localOrigin}/${site.slug}/`)).text(), /Published original/);
+  assert.match(await (await fetch(`${f.origin}/${site.slug}/`)).text(), /Published original/);
 });
